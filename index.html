@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>CORE 2026 - Mobile Unit Evaluation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .safe-area-top { padding-top: max(0.75rem, env(safe-area-inset-top)); }
+    .safe-area-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+    body { margin: 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+const { useState, useEffect, useMemo, useRef } = React;
+
+const CATEGORIES = [
+  { id: "serving", name: "Serving Up Más", color: "#E91E63", subcategories: ["The Customer Experience", "Customer Shop Review"] },
+  { id: "kitchen", name: "Kitchen 101", color: "#FF9800", subcategories: ["Back of House Fundamentals"] },
+  { id: "people", name: "Right People, Right Team", color: "#9C27B0", subcategories: ["Training Verification"] },
+  { id: "brand", name: "The Brand Experience", color: "#3F51B5", subcategories: ["Technology Check", "Equipment Review", "Outside Your Taco Bell (C&M)", "Inside Your Taco Bell (C&M)"] },
+];
+
+const LINE_ITEMS = [
+  { id: "H1.1", code: "H1.1", title: "Customers Are Greeted With A Friendly Welcome Within 5 Seconds", points: 5, category: "serving", subcategory: "The Customer Experience", allowNA: true },
+  { id: "H1.5", code: "H1.5", title: "The Digital Business: Measuring The Delivery And Click & Collect Customer Experience", points: 5, category: "serving", subcategory: "The Customer Experience", allowNA: true },
+  { id: "H2.2", code: "H2.2", title: "Friendly Close With Eye Contact", points: 3, category: "serving", subcategory: "The Customer Experience", allowNA: true },
+  { id: "A1.3", code: "A1.3", title: "Order Is Repeated Or Confirmed On OCB With Total", points: 5, category: "serving", subcategory: "The Customer Experience", allowNA: true },
+  { id: "S1.1", code: "S1.1", title: "Dine-In And/Or Drive-Thru Time Meets Standards During Shop", points: 5, category: "serving", subcategory: "The Customer Experience", allowNA: true, tiered: true },
+  { id: "P1.1", code: "P1.1", title: "Food Meets Appearance Standards, Looks Full, Correct Weights And Finished The Right Way", points: 5, category: "serving", subcategory: "Customer Shop Review", allowNA: true },
+  { id: "A4.2", code: "A4.2", title: "Customer Receives What They Order With Extras", points: 5, category: "serving", subcategory: "Customer Shop Review", allowNA: true },
+  { id: "CM4.5", code: "CM4.5", title: "Kitchen Sightlines/Counter Clean And Maintained", points: 5, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "S2.1", code: "S2.1", title: "Equipment Readiness", points: 5, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "S2.2", code: "S2.2", title: "Deployment Chart Posted And Filled Out (TRED)", points: 5, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "P2.1", code: "P2.1", title: "Ingredients Properly Prepped, Ready, And Stirred On The Line", points: 5, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "P2.2", code: "P2.2", title: "Oil Is Clean And Ready To Fry", points: 3, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "P2.4", code: "P2.4", title: "Packaging Stocked On The Line", points: 3, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "P3.1", code: "P3.1", title: "Kitchen Utensils Are Available And Used", points: 5, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "P5.1", code: "P5.1", title: "Prep Guide Is Complete And Followed", points: 3, category: "kitchen", subcategory: "Back of House Fundamentals", allowNA: true },
+  { id: "TR1.1", code: "TR1.1", title: "MIC Certified In Role", points: 5, category: "people", subcategory: "Training Verification", allowNA: true },
+  { id: "H3.1", code: "H3.1", title: "Team Is In Correct Uniform", points: 5, category: "people", subcategory: "Training Verification", allowNA: true },
+  { id: "CM5.2", code: "CM5.2", title: "Kiosk Is Clean & In Good Repair. Interior Menuboard Clean And In Good Repair With Correct Pricing", points: 3, category: "brand", subcategory: "Technology Check", allowNA: true },
+  { id: "CM5.3", code: "CM5.3", title: "POS/KDS & Credit Card Terminal Are Clean & In Good Repair", points: 3, category: "brand", subcategory: "Technology Check", allowNA: true },
+  { id: "CM1.1", code: "CM1.1", title: "Parking Lot, Drive-Thru Lane, Dumpster Pad & Sidewalks, Are Clean, Free Of Build-Up, And In Good Condition", points: 3, category: "brand", subcategory: "Outside Your Taco Bell (C&M)", allowNA: true },
+  { id: "CM1.2", code: "CM1.2", title: "Landscaping Is Clean & In Good Repair", points: 2, category: "brand", subcategory: "Outside Your Taco Bell (C&M)", allowNA: true },
+  { id: "CM1.4", code: "CM1.4", title: "Outside Of Building, Signage, Walls, Windows, Doors, Window Signage & Open Hours Posted Clean And In Good Repair", points: 3, category: "brand", subcategory: "Outside Your Taco Bell (C&M)", allowNA: true },
+  { id: "CM1.6", code: "CM1.6", title: "Drive-Thru Window Is Clean & In Good Repair", points: 3, category: "brand", subcategory: "Outside Your Taco Bell (C&M)", allowNA: true },
+  { id: "CM2.1", code: "CM2.1", title: "Exterior Menuboard And OCB Are Clean, Correct Pricing & In Good Repair", points: 2, category: "brand", subcategory: "Outside Your Taco Bell (C&M)", allowNA: true },
+  { id: "CM3.1", code: "CM3.1", title: "Restroom Walls, Floors, Fixtures Are Clean, Stocked And In Good Repair", points: 5, category: "brand", subcategory: "Inside Your Taco Bell (C&M)", allowNA: true },
+  { id: "CM4.1", code: "CM4.1", title: "Dining Room Furniture, Trash Receptacles, Walls, Ceilings And Floors Clean And In Good Repair", points: 5, category: "brand", subcategory: "Inside Your Taco Bell (C&M)", allowNA: true },
+  { id: "CM4.3", code: "CM4.3", title: "Dining Room Drink Station, Condiment Station Clean & In Good Repair", points: 2, category: "brand", subcategory: "Inside Your Taco Bell (C&M)", allowNA: true },
+];
+
+const WATCHOUTS = [
+  { id: "WO1", title: "ARL Involvement", points: 10 },
+  { id: "WO2", title: "Parking A Car During A Visit", points: 10 },
+  { id: "WO3", title: "Brand Protection", points: 10 },
+  { id: "WO4", title: "Box Meals Received In Designated Box", points: 10 },
+  { id: "WO5", title: "Voice Of Customer (VOC) Integrity", points: 10 },
+];
+
+function getSpeedScore(minutes, seconds) {
+  var totalSeconds = (minutes * 60) + Number(seconds);
+  if (totalSeconds <= 240) return 5;
+  if (totalSeconds <= 255) return 4;
+  if (totalSeconds <= 300) return 2;
+  return 0;
+}
+
+function calculateScores(responses) {
+  var results = { categories: {}, overall: { earned: 0, possible: 0, percentage: 0 }, watchoutDeductions: 0 };
+  CATEGORIES.forEach(function(cat) { results.categories[cat.id] = { earned: 0, possible: 0, items: [] }; });
+  LINE_ITEMS.forEach(function(item) {
+    var response = responses[item.id];
+    if (!response || response.status === "na") return;
+    var catResult = results.categories[item.category];
+    catResult.possible += item.points;
+    results.overall.possible += item.points;
+    var earned = 0;
+    if (response.status === "pass") earned = item.points;
+    else if (item.tiered && response.status === "tiered") earned = response.tieredScore || 0;
+    catResult.earned += earned;
+    results.overall.earned += earned;
+    catResult.items.push(Object.assign({}, item, { earned: earned, status: response.status, notes: response.notes }));
+  });
+  WATCHOUTS.forEach(function(wo) {
+    if (responses[wo.id] && responses[wo.id].status === "fail") results.watchoutDeductions += wo.points;
+  });
+  results.overall.earned = Math.max(0, results.overall.earned - results.watchoutDeductions);
+  results.overall.percentage = results.overall.possible > 0 ? Math.round((results.overall.earned / results.overall.possible) * 100) : 0;
+  return results;
+}
+
+function Svg(p) {
+  return React.createElement("svg", { className: p.className, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }, p.children);
+}
+
+var I = {
+  Check: function(c) { return <Svg className={c.className}><polyline points="20 6 9 17 4 12"/></Svg>; },
+  X: function(c) { return <Svg className={c.className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Svg>; },
+  Minus: function(c) { return <Svg className={c.className}><line x1="5" y1="12" x2="19" y2="12"/></Svg>; },
+  Clock: function(c) { return <Svg className={c.className}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Svg>; },
+  Down: function(c) { return <Svg className={c.className}><polyline points="6 9 12 15 18 9"/></Svg>; },
+  Up: function(c) { return <Svg className={c.className}><polyline points="18 15 12 9 6 15"/></Svg>; },
+  Right: function(c) { return <Svg className={c.className}><polyline points="9 18 15 12 9 6"/></Svg>; },
+  Left: function(c) { return <Svg className={c.className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></Svg>; },
+  Share: function(c) { return <Svg className={c.className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></Svg>; },
+  Msg: function(c) { return <Svg className={c.className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></Svg>; },
+  Alert: function(c) { return <Svg className={c.className}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Svg>; },
+  File: function(c) { return <Svg className={c.className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></Svg>; },
+  Clip: function(c) { return <Svg className={c.className}><path d="M9 2h6a1 1 0 0 1 1 1v1H8V3a1 1 0 0 1 1-1z"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><polyline points="9 14 11 16 15 12"/></Svg>; },
+  Rotate: function(c) { return <Svg className={c.className}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></Svg>; },
+};
+
+function ScoreBanner(props) {
+  var earned = props.earned, possible = props.possible, wd = props.watchoutDeductions || 0;
+  var pct = possible > 0 ? Math.round((earned / possible) * 100) : 0;
+  var color = pct >= 80 ? "#10b981" : pct >= 60 ? "#f59e0b" : "#ef4444";
+  var C = 2 * Math.PI * 28;
+  var off = C - (pct / 100) * C;
+  var lost = possible - earned;
+  return (
+    <div className="bg-zinc-900 rounded-2xl p-4 flex items-center gap-4">
+      <div className="relative w-16 h-16 flex-shrink-0">
+        <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="28" fill="none" stroke="#27272a" strokeWidth="4" />
+          <circle cx="32" cy="32" r="28" fill="none" stroke={color} strokeWidth="4" strokeLinecap="round"
+            strokeDasharray={C} strokeDashoffset={off}
+            style={{ transition: "stroke-dashoffset 0.6s ease-out, stroke 0.3s ease" }} />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-lg font-bold" style={{ color: color }}>{pct}%</span>
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-white font-semibold text-sm">CORE Score</div>
+        <div className="text-zinc-400 text-xs mt-0.5">{earned} / {possible} pts{lost > 0 ? " (-" + lost + ")" : ""}</div>
+        {wd > 0 && <div className="text-red-400 text-xs mt-0.5">Watch-out: -{wd} pts</div>}
+        {lost > 20 && <div className="text-red-400 text-xs font-semibold mt-0.5">Over 20-pt limit!</div>}
+      </div>
+    </div>
+  );
+}
+
+function CategoryProgress(props) {
+  var responses = props.responses;
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {CATEGORIES.map(function(cat) {
+        var items = LINE_ITEMS.filter(function(i) { return i.category === cat.id; });
+        var answered = items.filter(function(i) { return responses[i.id] && responses[i.id].status; }).length;
+        var total = items.length;
+        var earned = 0, possible = 0;
+        items.forEach(function(item) {
+          var r = responses[item.id];
+          if (!r || r.status === "na") return;
+          possible += item.points;
+          if (r.status === "pass") earned += item.points;
+          else if (r.status === "tiered") earned += r.tieredScore || 0;
+        });
+        var pct = possible > 0 ? Math.round((earned / possible) * 100) : null;
+        return (
+          <div key={cat.id} className="bg-white border border-zinc-200 rounded-xl p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+              <span className="text-xs font-semibold text-zinc-700 truncate">{cat.name}</span>
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <span className="text-lg font-bold text-zinc-900">{pct !== null ? pct + "%" : "—"}</span>
+                <span className="text-xs text-zinc-400 ml-1">{earned}/{possible}</span>
+              </div>
+              <span className="text-[10px] text-zinc-400">{answered}/{total}</span>
+            </div>
+            <div className="mt-1.5 h-1 bg-zinc-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: (pct || 0) + "%", backgroundColor: cat.color }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ChecklistItem(props) {
+  var item = props.item, response = props.response || {}, onUpdate = props.onUpdate;
+  var expanded = useState(false);
+  var notes = useState(response.notes || "");
+  var speedMin = useState(response.speedMin != null ? response.speedMin : "");
+  var speedSec = useState(response.speedSec != null ? response.speedSec : "");
+  var status = response.status;
+
+  var handleStatus = function(newStatus) {
+    var update = { status: newStatus, notes: notes[0] };
+    if (item.tiered && newStatus === "tiered") {
+      update.speedMin = speedMin[0];
+      update.speedSec = speedSec[0];
+      update.tieredScore = getSpeedScore(Number(speedMin[0]) || 0, Number(speedSec[0]) || 0);
+    }
+    onUpdate(item.id, update);
+  };
+
+  var handleSpeedChange = function(min, sec) {
+    speedMin[1](min); speedSec[1](sec);
+    if (status === "tiered") {
+      onUpdate(item.id, { status: "tiered", notes: notes[0], speedMin: min, speedSec: sec, tieredScore: getSpeedScore(Number(min) || 0, Number(sec) || 0) });
+    }
+  };
+
+  var handleNotesBlur = function() {
+    if (status) onUpdate(item.id, Object.assign({}, response, { notes: notes[0] }));
+  };
+
+  var getStatusStyle = function(s) {
+    if (status === s) {
+      if (s === "pass") return "bg-emerald-500 text-white";
+      if (s === "fail") return "bg-red-500 text-white";
+      if (s === "na") return "bg-zinc-500 text-white";
+      if (s === "tiered") return "bg-amber-500 text-white";
+    }
+    return "bg-zinc-100 text-zinc-500";
+  };
+
+  var getEarned = function() {
+    if (!status) return null;
+    if (status === "pass") return item.points;
+    if (status === "fail") return 0;
+    if (status === "na") return "N/A";
+    if (status === "tiered") return response.tieredScore || 0;
+    return 0;
+  };
+
+  var earnedDisplay = getEarned();
+
+  return (
+    <div className={"border rounded-xl overflow-hidden transition-all " + (status === "fail" ? "border-red-200 bg-red-50/30" : status === "pass" ? "border-emerald-200 bg-emerald-50/30" : "border-zinc-200 bg-white")}>
+      <button className="w-full px-4 py-3 flex items-start gap-3 text-left" onClick={function() { expanded[1](!expanded[0]); }}>
+        <div className="flex-shrink-0 mt-0.5">
+          <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded">{item.code}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-zinc-800 leading-tight">{item.title}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-zinc-400">{item.points} pts</span>
+            {earnedDisplay !== null && earnedDisplay !== "N/A" && (
+              <span className={"text-xs font-semibold " + (earnedDisplay === item.points ? "text-emerald-600" : earnedDisplay > 0 ? "text-amber-600" : "text-red-600")}>&rarr; {earnedDisplay}/{item.points}</span>
+            )}
+            {earnedDisplay === "N/A" && <span className="text-xs font-semibold text-zinc-400">&rarr; N/A</span>}
+            {notes[0] && <I.Msg className="w-3 h-3 text-blue-400" />}
+          </div>
+        </div>
+        {expanded[0] ? <I.Up className="w-4 h-4 text-zinc-400 mt-1" /> : <I.Down className="w-4 h-4 text-zinc-400 mt-1" />}
+      </button>
+      {expanded[0] && (
+        <div className="px-4 pb-4 space-y-3">
+          <div className="flex gap-2">
+            <button onClick={function() { handleStatus("pass"); }} className={"flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all " + getStatusStyle("pass")}>
+              <I.Check className="w-4 h-4" /> Pass
+            </button>
+            {item.tiered ? (
+              <button onClick={function() { handleStatus("tiered"); }} className={"flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all " + getStatusStyle("tiered")}>
+                <I.Clock className="w-4 h-4" /> Timed
+              </button>
+            ) : (
+              <button onClick={function() { handleStatus("fail"); }} className={"flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all " + getStatusStyle("fail")}>
+                <I.X className="w-4 h-4" /> Fail
+              </button>
+            )}
+            <button onClick={function() { handleStatus("na"); }} className={"flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all " + getStatusStyle("na")}>
+              <I.Minus className="w-4 h-4" /> N/A
+            </button>
+          </div>
+          {item.tiered && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <input type="number" min="0" max="59" placeholder="0" value={speedMin[0]} onChange={function(e) { handleSpeedChange(e.target.value, speedSec[0]); }} className="w-14 h-9 text-center border rounded-lg text-sm" />
+                  <span className="text-xs text-zinc-500">min</span>
+                </div>
+                <span className="text-zinc-400 font-bold">:</span>
+                <div className="flex items-center gap-1">
+                  <input type="number" min="0" max="59" placeholder="0" value={speedSec[0]} onChange={function(e) { handleSpeedChange(speedMin[0], e.target.value); }} className="w-14 h-9 text-center border rounded-lg text-sm" />
+                  <span className="text-xs text-zinc-500">sec</span>
+                </div>
+              </div>
+              {status === "tiered" && <div className="text-xs text-zinc-500">&le;4:00 = 5pts &middot; 4:01-4:15 = 4pts &middot; 4:16-5:00 = 2pts &middot; &gt;5:00 = 0pts</div>}
+              <button onClick={function() { handleStatus("fail"); }} className={"w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all " + getStatusStyle("fail")}>
+                <I.X className="w-4 h-4" /> Fail (0 pts)
+              </button>
+            </div>
+          )}
+          <textarea value={notes[0]} onChange={function(e) { notes[1](e.target.value); }} onBlur={handleNotesBlur} placeholder="Add notes..." className="w-full h-16 text-sm border rounded-lg p-2 resize-none" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WatchoutItem(props) {
+  var wo = props.watchout, response = props.response || {}, onUpdate = props.onUpdate;
+  var status = response.status;
+  return (
+    <div className={"border rounded-xl p-4 " + (status === "fail" ? "border-red-300 bg-red-50" : status === "pass" ? "border-emerald-200 bg-emerald-50/30" : "border-zinc-200 bg-white")}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <I.Alert className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <span className="text-sm font-semibold text-zinc-800">{wo.title}</span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-1">-{wo.points} pts if triggered</p>
+        </div>
+      </div>
+      <div className="flex gap-2 mt-3">
+        <button onClick={function() { onUpdate(wo.id, { status: "pass" }); }} className={"flex-1 py-2 rounded-lg text-sm font-medium transition-all " + (status === "pass" ? "bg-emerald-500 text-white" : "bg-zinc-100 text-zinc-500")}>
+          <I.Check className="w-4 h-4 inline mr-1" /> OK
+        </button>
+        <button onClick={function() { onUpdate(wo.id, { status: "fail" }); }} className={"flex-1 py-2 rounded-lg text-sm font-medium transition-all " + (status === "fail" ? "bg-red-500 text-white" : "bg-zinc-100 text-zinc-500")}>
+          <I.X className="w-4 h-4 inline mr-1" /> Triggered
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HomePage(props) {
+  var storeNumber = useState("");
+  var evaluatorName = useState("");
+  var hasSaved = !!localStorage.getItem("core_responses");
+
+  var startNew = function() {
+    localStorage.setItem("core_meta", JSON.stringify({ storeNumber: storeNumber[0], evaluatorName: evaluatorName[0], startTime: new Date().toISOString() }));
+    localStorage.removeItem("core_responses");
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 flex flex-col">
+      <div className="pt-12 pb-8 px-6 text-center">
+        <div className="inline-flex items-center gap-2 bg-purple-600/20 text-purple-400 text-xs font-semibold px-3 py-1 rounded-full mb-4">CORE INTERNATIONAL 2026</div>
+        <h1 className="text-3xl font-bold text-white tracking-tight">Mobile Unit<br />Evaluation</h1>
+        <p className="text-zinc-500 text-sm mt-2">Taco Bell Operations Scoring</p>
+      </div>
+      <div className="flex-1 bg-white rounded-t-3xl px-6 pt-8 pb-6 space-y-6">
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Store Number</label>
+            <input type="text" value={storeNumber[0]} onChange={function(e) { storeNumber[1](e.target.value); }} placeholder="e.g. 12345" className="mt-1 w-full h-12 px-4 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Evaluator Name</label>
+            <input type="text" value={evaluatorName[0]} onChange={function(e) { evaluatorName[1](e.target.value); }} placeholder="Your name" className="mt-1 w-full h-12 px-4 border border-zinc-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none" />
+          </div>
+        </div>
+        <button onClick={function() { startNew(); props.go("evaluate"); }} className="w-full h-14 bg-zinc-900 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-semibold hover:bg-zinc-800 transition-colors">
+          <I.Clip className="w-5 h-5" /> Start New Evaluation
+        </button>
+        {hasSaved && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <div className="h-px flex-1 bg-zinc-200" /><span>Previous evaluation in progress</span><div className="h-px flex-1 bg-zinc-200" />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={function() { props.go("evaluate"); }} className="flex-1 h-12 border border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+                <I.Rotate className="w-4 h-4" /> Resume
+              </button>
+              <button onClick={function() { props.go("report"); }} className="flex-1 h-12 border border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+                <I.File className="w-4 h-4" /> View Report
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="pt-4 text-center"><p className="text-[10px] text-zinc-300 uppercase tracking-widest">Core International 2026 &middot; All Categories</p></div>
+      </div>
+    </div>
+  );
+}
+
+function EvaluatePage(props) {
+  var activeTab = useState(CATEGORIES[0].id);
+  var responses = useState(function() { var s = localStorage.getItem("core_responses"); return s ? JSON.parse(s) : {}; });
+  useEffect(function() { localStorage.setItem("core_responses", JSON.stringify(responses[0])); }, [responses[0]]);
+  var handleUpdate = function(id, data) { responses[1](function(prev) { return Object.assign({}, prev, Object.keys(data).reduce(function(acc, k) { acc[k] = data[k]; return acc; }, {}), function() { var merged = {}; merged[id] = Object.assign({}, prev[id] || {}, data); return merged; }()[id] ? Object.assign({}, prev, (function() { var o = {}; o[id] = Object.assign({}, prev[id] || {}, data); return o; })()) : {}); }); };
+
+  var scores = useMemo(function() { return calculateScores(responses[0]); }, [responses[0]]);
+  var activeItems = LINE_ITEMS.filter(function(i) { return i.category === activeTab[0]; });
+  var grouped = {};
+  activeItems.forEach(function(item) { if (!grouped[item.subcategory]) grouped[item.subcategory] = []; grouped[item.subcategory].push(item); });
+  var totalItems = LINE_ITEMS.length + WATCHOUTS.length;
+  var answeredItems = LINE_ITEMS.filter(function(i) { return responses[0][i.id] && responses[0][i.id].status; }).length + WATCHOUTS.filter(function(w) { return responses[0][w.id] && responses[0][w.id].status; }).length;
+  var TABS = CATEGORIES.map(function(c) { return { id: c.id, label: c.name, color: c.color }; }).concat([{ id: "watchouts", label: "Watch-Outs", color: "#ef4444" }]);
+
+  var handleUpdateSimple = function(id, data) {
+    responses[1](function(prev) {
+      var next = Object.assign({}, prev);
+      next[id] = Object.assign({}, prev[id] || {}, data);
+      return next;
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-50 flex flex-col">
+      <div className="bg-white border-b border-zinc-200 px-4 pt-3 pb-3 safe-area-top">
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={function() { props.go("home"); }} className="flex items-center gap-1 text-sm text-zinc-500"><I.Left className="w-4 h-4" /></button>
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Evaluation</span>
+          <button onClick={function() { props.go("report"); }} className="flex items-center gap-1 text-sm font-semibold text-purple-600">Report <I.Right className="w-4 h-4" /></button>
+        </div>
+        <ScoreBanner earned={scores.overall.earned} possible={scores.overall.possible} watchoutDeductions={scores.watchoutDeductions} />
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+            <div className="h-full bg-purple-500 rounded-full transition-all duration-300" style={{ width: ((answeredItems / totalItems) * 100) + "%" }} />
+          </div>
+          <span className="text-[10px] text-zinc-400 font-medium">{answeredItems}/{totalItems}</span>
+        </div>
+      </div>
+      <div className="px-4 py-3"><CategoryProgress responses={responses[0]} /></div>
+      <div className="px-4 pb-2">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {TABS.map(function(tab) {
+            return <button key={tab.id} onClick={function() { activeTab[1](tab.id); }} className={"flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap " + (activeTab[0] === tab.id ? "text-white" : "bg-white text-zinc-600 border border-zinc-200")} style={activeTab[0] === tab.id ? { backgroundColor: tab.color } : {}}> {tab.label}</button>;
+          })}
+        </div>
+      </div>
+      <div className="flex-1 px-4 pb-24 space-y-4">
+        {activeTab[0] === "watchouts" ? (
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mt-2">Watch-Outs (10 pts each)</h3>
+            {WATCHOUTS.map(function(wo) { return <WatchoutItem key={wo.id} watchout={wo} response={responses[0][wo.id]} onUpdate={handleUpdateSimple} />; })}
+          </div>
+        ) : (
+          Object.keys(grouped).map(function(subcategory) {
+            return (
+              <div key={subcategory} className="space-y-2">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mt-2">{subcategory}</h3>
+                {grouped[subcategory].map(function(item) { return <ChecklistItem key={item.id} item={item} response={responses[0][item.id]} onUpdate={handleUpdateSimple} />; })}
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 px-4 py-3 safe-area-bottom">
+        <div className="flex gap-2">
+          {(function() {
+            var ci = TABS.findIndex(function(t) { return t.id === activeTab[0]; });
+            var prev = ci > 0 ? TABS[ci - 1] : null;
+            var next = ci < TABS.length - 1 ? TABS[ci + 1] : null;
+            return (
+              <React.Fragment>
+                {prev ? <button onClick={function() { activeTab[1](prev.id); }} className="flex-1 h-11 border border-zinc-200 rounded-xl text-sm font-medium text-zinc-60">&larr; {prev.label}</button> : <div className="flex-1" />}
+                {next ? <button onClick={function() { activeTab[1](next.id); }} className="flex-1 h-11 bg-zinc-900 text-white rounded-xl text-sm font-medium">{next.label} &rarr;</button> : <button onClick={function() { props.go("report"); }} className="flex-1 h-11 bg-purple-600 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2"><I.File className="w-4 h-4" /> View Report</button>}
+              </React.Fragment>
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportPage(props) {
+  var responses = useMemo(function() { var s = localStorage.getItem("core_responses"); return s ? JSON.parse(s) : {}; }, []);
+  var meta = useMemo(function() { var s = localStorage.getItem("core_meta"); return s ? JSON.parse(s) : {}; }, []);
+  var scores = useMemo(function() { return calculateScores(responses); }, [responses]);
+  var pct = scores.overall.percentage;
+  var lost = scores.overall.possible - scores.overall.earned;
+  var passing = lost <= 20;
+  var statusColor = passing ? "text-emerald-600" : "text-red-600";
+  var statusBg = passing ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200";
+  var C = 2 * Math.PI * 50;
+  var off = C - (pct / 100) * C;
+
+  var generateTextReport = function() {
+    var L = [];
+    L.push("CORE INTERNATIONAL 2026 - EVALUATION REPORT");
+    L.push("=".repeat(50));
+    L.push("Store: " + (meta.storeNumber || "N/A"));
+    L.push("Evaluator: " + (meta.evaluatorName || "N/A"));
+    L.push("Date: " + (meta.startTime ? new Date(meta.startTime).toLocaleDateString() : "N/A"));
+    L.push("");
+    L.push("OVERALL SCORE: " + scores.overall.earned + "/" + scores.overall.possible + " (" + pct + "%)");
+    L.push("STATUS: " + (passing ? "AT STANDARD" : "NOT AT STANDARD"));
+    L.push("POINTS LOST: " + lost + " (limit: 20)");
+    if (scores.watchoutDeductions > 0) L.push("Watch-Out Deductions: -" + scores.watchoutDeductions + " pts");
+    L.push("");
+    L.push("=".repeat(50));
+    CATEGORIES.forEach(function(cat) {
+      var cs = scores.categories[cat.id];
+      if (!cs) return;
+      var cp = cs.possible > 0 ? Math.round((cs.earned / cs.possible) * 100) : 0;
+      L.push("");
+      L.push(cat.name.toUpperCase() + ": " + cs.earned + "/" + cs.possible + " (" + cp + "%)");
+      L.push("-".repeat(40));
+      cs.items.forEach(function(item) {
+        var icon = item.status === "pass" ? "[PASS]" : item.status === "fail" ? "[FAIL]" : item.status === "tiered" ? "[TIMED]" : "[--]";
+        L.push(icon + " " + item.code + ": " + item.title + " - " + item.earned + "/" + item.points);
+        if (item.notes) L.push("  Notes: " + item.notes);
+      });
+    });
+    var triggered = WATCHOUTS.filter(function(w) { return responses[w.id] && responses[w.id].status === "fail"; });
+    if (triggered.length > 0) {
+      L.push("");
+      L.push("WATCH-OUTS TRIGGERED:");
+      triggered.forEach(function(w) { L.push("[!] " + w.title + " (-" + w.points + " pts)"); });
+    }
+    return L.join("\n");
+  };
+
+  var handleShare = function() {
+    var text = generateTextReport();
+    if (navigator.share) {
+      navigator.share({ title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: text })["catch"](function() {});
+    } else {
+      navigator.clipboard.writeText(text).then(function() { alert("Report copied to clipboard!"); });
+    }
+  };
+
+  var getStatusIcon = function(status) {
+    if (status === "pass") return <I.Check className="w-4 h-4 text-emerald-500" />;
+    if (status === "fail") return <I.X className="w-4 h-4 text-red-500" />;
+    if (status === "tiered") return <I.Clock className="w-4 h-4 text-amber-500" />;
+    return <I.Minus className="w-4 h-4 text-zinc-300" />;
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-50">
+      <div className="bg-white border-b border-zinc-200 px-4 pt-3 pb-3 safe-area-top">
+        <div className="flex items-center justify-between">
+          <button onClick={function() { props.go("evaluate"); }} className="flex items-center gap-1 text-sm text-zinc-500"><I.Left className="w-4 h-4" /></button>
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Report</span>
+          <button onClick={handleShare} className="text-purple-600"><I.Share className="w-5 h-5" /></button>
+        </div>
+      </div>
+      <div className="px-4 py-6 space-y-6 pb-24">
+        <div className="text-center">
+          <p className="text-xs text-zinc-400 uppercase tracking-wider">Core International 2026</p>
+          <h2 className="text-lg font-bold text-zinc-900 mt-1">Store #{meta.storeNumber || "—"}</h2>
+          <p className="text-xs text-zinc-400 mt-0.5">{meta.evaluatorName || "Unknown Evaluator"} &middot; {meta.startTime ? new Date(meta.startTime).toLocaleDateString() : ""}</p>
+        </div>
+        <div className={"border rounded-2xl p-6 text-center " + statusBg}>
+          <div className="relative w-28 h-28 mx-auto mb-3">
+            <svg className="w-28 h-28 -rotate-90" viewBox="0 0 112 112">
+              <circle cx="56" cy="56" r="50" fill="none" stroke="#e5e7eb" strokeWidth="6" />
+              <circle cx="56" cy="56" r="50" fill="none" stroke={passing ? "#10b981" : "#ef4444"} strokeWidth="6" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off} style={{ transition: "stroke-dashoffset 0.6s ease-out, stroke 0.3s ease" }} />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-3xl font-bold text-zinc-900">{pct}%</span></div>
+          </div>
+          <div className={"text-lg font-bold " + statusColor}>{passing ? "AT STANDARD" : "NOT AT STANDARD"}</div>
+          <p className="text-sm text-zinc-600 mt-1">{scores.overall.earned} / {scores.overall.possible} points</p>
+          <p className={"text-sm font-semibold mt-1 " + (lost > 20 ? "text-red-600" : "text-emerald-600")}>{lost} points lost {lost > 20 ? "(exceeds 20-pt limit)" : "(within 20-pt limit)"}</p>
+          {scores.watchoutDeductions > 0 && <div className="mt-2 flex items-center justify-center gap-1 text-sm text-red-600"><I.Alert className="w-4 h-4" />Watch-out deductions: -{scores.watchoutDeductions} pts</div>}
+        </div>
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Category Breakdown</h3>
+          {CATEGORIES.map(function(cat) {
+            var cs = scores.categories[cat.id]; if (!cs) return null;
+            var cp = cs.possible > 0 ? Math.round((cs.earned / cs.possible) * 100) : 0;
+            return (
+              <div key={cat.id} className="bg-white border border-zinc-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} /><span className="text-sm font-semibold text-zinc-800">{cat.name}</span></div>
+                  <span className="text-sm font-bold" style={{ color: cat.color }}>{cp}%</span>
+                </div>
+                <div className="h-2 bg-zinc-100 rounded-full overflow-hidden mb-2"><div className="h-full rounded-full" style={{ width: cp + "%", backgroundColor: cat.color }} /></div>
+                <p className="text-xs text-zinc-400">{cs.earned}/{cs.possible} pts</p>
+              </div>
+            );
+          })}
+        </div>
+        <div className="space-y-4">
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Line Item Details</h3>
+          {CATEGORIES.map(function(cat) {
+            var cs = scores.categories[cat.id]; if (!cs || cs.items.length === 0) return null;
+            return (
+              <div key={cat.id} className="space-y-1">
+                <h4 className="text-xs font-bold mt-2" style={{ color: cat.color }}>{cat.name}</h4>
+                {cs.items.map(function(item) {
+                  return (
+                    <div key={item.id} className={"bg-white border rounded-lg px-3 py-2.5 flex items-start gap-2 " + (item.status === "fail" ? "border-red-200" : "border-zinc-200")}>
+                      {getStatusIcon(item.status)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-zinc-400">{item.code}</span>
+                          <span className={"text-xs font-bold " + (item.earned === item.points ? "text-emerald-600" : item.earned > 0 ? "text-amber-600" : "text-red-600")}>{item.earned}/{item.points}</span>
+                        </div>
+                        <p className="text-xs text-zinc-700 mt-0.5 leading-tight">{item.title}</p>
+                        {item.notes && <p className="text-[10px] text-blue-500 mt-1 italic">{item.notes}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {(function() {
+            var naItems = LINE_ITEMS.filter(function(i) { return responses[i.id] && responses[i.id].status === "na"; });
+            if (naItems.length === 0) return null;
+            return (
+              <div className="space-y-1">
+                <h4 className="text-xs font-bold text-zinc-400 mt-2">Not Applicable</h4>
+                {naItems.map(function(item) {
+                  return <div key={item.id} className="bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 flex items-center gap-2"><I.Minus className="w-4 h-4 text-zinc-300" /><span className="text-[10px] font-mono text-zinc-400">{item.code}</span><span className="text-xs text-zinc-500 truncate">{item.title}</span></div>;
+                })}
+              </div>
+            );
+          })()}
+          {(function() {
+            var triggered = WATCHOUTS.filter(function(w) { return responses[w.id] && responses[w.id].status === "fail"; });
+            if (triggered.length === 0) return null;
+            return (
+              <div className="space-y-1">
+                <h4 className="text-xs font-bold text-red-500 mt-2">Watch-Outs Triggered</h4>
+                {triggered.map(function(w) { return <div key={w.id} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center gap-2"><I.Alert className="w-4 h-4 text-red-500" /><span className="text-xs text-red-700 font-medium">{w.title}</span><span className="text-xs text-red-500 ml-auto">-{w.points} pts</span></div>; })}
+              </div>
+            );
+          })()}
+          {(function() {
+            var unanswered = LINE_ITEMS.filter(function(i) { return !responses[i.id] || !responses[i.id].status; });
+            if (unanswered.length === 0) return null;
+            return <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><p className="text-sm font-semibold text-amber-800">{unanswered.length} items not yet evaluated</p><p className="text-xs text-amber-600 mt-1">Return to the evaluation to complete all line items.</p></div>;
+          })()}
+        </div>
+      </div>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 px-4 py-3 safe-area-bottom">
+        <div className="flex gap-2">
+          <button onClick={function() { props.go("evaluate"); }} className="flex-1 h-11 border border-zinc-200 rounded-xl flex items-center justify-center text-sm font-medium text-zinc-600">&larr; Back to Evaluation</button>
+          <button onClick={handleShare} className="flex-1 h-11 bg-purple-600 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-semibold"><I.Share className="w-4 h-4" /> Share Report</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  var page = useState("home");
+  var go = function(p) { page[1](p); window.scrollTo(0, 0); };
+  if (page[0] === "home") return <HomePage go={go} />;
+  if (page[0] === "evaluate") return <EvaluatePage go={go} />;
+  if (page[0] === "report") return <ReportPage go={go} />;
+  return <HomePage go={go} />;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
