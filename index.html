@@ -783,13 +783,47 @@ function ReportPage(props) {
     return L.join("\n");
   };
 
+  var createExportContainer = function() {
+    var c = document.createElement("div");
+    c.style.position = "fixed";
+    c.style.left = "-9999px";
+    c.style.top = "0";
+    c.style.width = "794px";
+    c.style.background = "#ffffff";
+    c.style.padding = "48px 40px";
+    c.style.boxSizing = "border-box";
+    c.className = "space-y-6";
+    c.innerHTML = reportRef.current.innerHTML;
+    document.body.appendChild(c);
+    return c;
+  };
+
+  var cleanupContainer = function(c) {
+    if (c && c.parentNode) c.parentNode.removeChild(c);
+  };
+
   var handleShare = function() {
-    var text = generateTextReport();
-    if (navigator.share) {
-      navigator.share({ title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: text })["catch"](function() {});
-    } else {
-      navigator.clipboard.writeText(text).then(function() { alert("Report copied to clipboard!"); });
-    }
+    exporting[1]("share");
+    var c = createExportContainer();
+    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {
+      cleanupContainer(c);
+      var filename = "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".png";
+      canvas.toBlob(function(blob) {
+        var file = new File([blob], filename, { type: "image/png" });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: "CORE 2026 Evaluation Report" }).then(function() { exporting[1](null); }, function() { exporting[1](null); });
+        } else if (navigator.share) {
+          navigator.share({ title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: generateTextReport() }).then(function() { exporting[1](null); }, function() { exporting[1](null); });
+        } else {
+          var link = document.createElement("a");
+          link.download = filename;
+          link.href = URL.createObjectURL(blob);
+          link.click();
+          URL.revokeObjectURL(link.href);
+          exporting[1](null);
+        }
+      }, "image/png");
+    })["catch"](function() { cleanupContainer(c); alert("Share failed."); exporting[1](null); });
   };
 
   var getStatusIcon = function(status) {
@@ -805,53 +839,41 @@ function ReportPage(props) {
 
   var exportPNG = function() {
     exporting[1]("png");
-    html2canvas(reportRef.current, { scale: 2, useCORS: true, backgroundColor: "#f4f4f5" }).then(function(canvas) {
-      var a4Ratio = 210 / 297;
-      var targetWidth = canvas.width;
-      var targetHeight = Math.round(targetWidth / a4Ratio);
-      var a4Canvas = document.createElement("canvas");
-      a4Canvas.width = targetWidth;
-      a4Canvas.height = targetHeight;
-      var ctx = a4Canvas.getContext("2d");
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, targetWidth, targetHeight);
-      var imgRatio = canvas.width / canvas.height;
-      var drawWidth = targetWidth;
-      var drawHeight = drawWidth / imgRatio;
-      if (drawHeight > targetHeight) {
-        drawHeight = targetHeight;
-        drawWidth = drawHeight * imgRatio;
-      }
-      ctx.drawImage(canvas, (targetWidth - drawWidth) / 2, (targetHeight - drawHeight) / 2, drawWidth, drawHeight);
+    var c = createExportContainer();
+    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {
+      cleanupContainer(c);
       var link = document.createElement("a");
       link.download = "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".png";
-      link.href = a4Canvas.toDataURL("image/png");
+      link.href = canvas.toDataURL("image/png");
       link.click();
       exporting[1](null);
-    })["catch"](function() { alert("Export failed."); exporting[1](null); });
+    })["catch"](function() { cleanupContainer(c); alert("Export failed."); exporting[1](null); });
   };
 
   var exportPDF = function() {
     exporting[1]("pdf");
-    html2canvas(reportRef.current, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {
+    var c = createExportContainer();
+    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {
+      cleanupContainer(c);
       var imgData = canvas.toDataURL("image/png");
-      var pdfWidth = 210, pdfHeight = 297, margin = 10;
-      var maxW = pdfWidth - margin * 2;
-      var maxH = pdfHeight - margin * 2;
-      var imgRatio = canvas.width / canvas.height;
-      var imgW = maxW;
-      var imgH = imgW / imgRatio;
-      if (imgH > maxH) {
-        imgH = maxH;
-        imgW = imgH * imgRatio;
-      }
-      var x = (pdfWidth - imgW) / 2;
-      var y = (pdfHeight - imgH) / 2;
       var pdf = new jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      pdf.addImage(imgData, "PNG", x, y, imgW, imgH);
+      var pdfW = 210, pdfH = 297, margin = 10;
+      var imgW = pdfW - margin * 2;
+      var imgH = canvas.height * imgW / canvas.width;
+      var usableH = pdfH - margin * 2;
+      var heightLeft = imgH;
+      var position = margin;
+      pdf.addImage(imgData, "PNG", margin, position, imgW, imgH);
+      heightLeft -= usableH;
+      while (heightLeft > 0) {
+        position = margin - (imgH - heightLeft);
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", margin, position, imgW, imgH);
+        heightLeft -= usableH;
+      }
       pdf.save("core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".pdf");
       exporting[1](null);
-    })["catch"](function() { alert("Export failed."); exporting[1](null); });
+    })["catch"](function() { cleanupContainer(c); alert("Export failed."); exporting[1](null); });
   };
 
   return (
@@ -860,7 +882,7 @@ function ReportPage(props) {
         <div className="flex items-center justify-between">
           <button onClick={function() { props.go("evaluate"); }} className="flex items-center gap-1 text-sm text-zinc-500"><I.Left className="w-4 h-4" /></button>
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Report</span>
-          <button onClick={handleShare} className="text-purple-600"><I.Share className="w-5 h-5" /></button>
+          <button onClick={handleShare} disabled={!!exporting[0]} className="text-purple-600 disabled:opacity-50">{exporting[0] === "share" ? <div className="w-5 h-5 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" /> : <I.Share className="w-5 h-5" />}</button>
         </div>
       </div>
       <div ref={reportRef} className="px-4 py-6 space-y-6 pb-24">
@@ -995,7 +1017,7 @@ function ReportPage(props) {
         </div>
         <div className="flex gap-2">
           <button onClick={function() { props.go("evaluate"); }} className="flex-1 h-11 border border-zinc-200 rounded-xl flex items-center justify-center text-sm font-medium text-zinc-600">&larr; Back to Evaluation</button>
-          <button onClick={handleShare} className="flex-1 h-11 bg-purple-600 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-semibold"><I.Share className="w-4 h-4" /> Share Report</button>
+          <button onClick={handleShare} disabled={!!exporting[0]} className="flex-1 h-11 bg-purple-600 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50">{exporting[0] === "share" ? <div className="w-4 h-4 border-2 border-purple-200 border-t-white rounded-full animate-spin" /> : <I.Share className="w-4 h-4" />} {exporting[0] === "share" ? "Generating..." : "Share Report"}</button>
         </div>
       </div>
     </div>
