@@ -784,18 +784,21 @@ function ReportPage(props) {
   };
 
   var createExportContainer = function() {
-    var c = document.createElement("div");
-    c.style.position = "fixed";
-    c.style.left = "-9999px";
-    c.style.top = "0";
-    c.style.width = "794px";
-    c.style.background = "#ffffff";
-    c.style.padding = "48px 40px";
-    c.style.boxSizing = "border-box";
-    c.className = "space-y-6";
-    c.innerHTML = reportRef.current.innerHTML;
-    document.body.appendChild(c);
-    return c;
+    var clone = reportRef.current.cloneNode(true);
+    clone.style.width = "794px";
+    clone.style.maxWidth = "794px";
+    clone.style.padding = "48px 40px";
+    clone.style.boxSizing = "border-box";
+    clone.style.background = "#ffffff";
+    var wrapper = document.createElement("div");
+    wrapper.style.position = "absolute";
+    wrapper.style.left = "-9999px";
+    wrapper.style.top = "0";
+    wrapper.style.width = "794px";
+    wrapper.style.background = "#ffffff";
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+    return wrapper;
   };
 
   var cleanupContainer = function(c) {
@@ -805,7 +808,8 @@ function ReportPage(props) {
   var handleShare = function() {
     exporting[1]("share");
     var c = createExportContainer();
-    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {
+    setTimeout(function() {
+    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794 }).then(function(canvas) {
       cleanupContainer(c);
       var filename = "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".png";
       canvas.toBlob(function(blob) {
@@ -824,6 +828,7 @@ function ReportPage(props) {
         }
       }, "image/png");
     })["catch"](function() { cleanupContainer(c); alert("Share failed."); exporting[1](null); });
+    }, 200);
   };
 
   var getStatusIcon = function(status) {
@@ -840,7 +845,8 @@ function ReportPage(props) {
   var exportPNG = function() {
     exporting[1]("png");
     var c = createExportContainer();
-    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {
+    setTimeout(function() {
+    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794 }).then(function(canvas) {
       cleanupContainer(c);
       var link = document.createElement("a");
       link.download = "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".png";
@@ -848,12 +854,14 @@ function ReportPage(props) {
       link.click();
       exporting[1](null);
     })["catch"](function() { cleanupContainer(c); alert("Export failed."); exporting[1](null); });
+    }, 200);
   };
 
   var exportPDF = function() {
     exporting[1]("pdf");
     var c = createExportContainer();
-    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(function(canvas) {
+    setTimeout(function() {
+    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794 }).then(function(canvas) {
       cleanupContainer(c);
       var imgData = canvas.toDataURL("image/png");
       var pdf = new jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -874,6 +882,7 @@ function ReportPage(props) {
       pdf.save("core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".pdf");
       exporting[1](null);
     })["catch"](function() { cleanupContainer(c); alert("Export failed."); exporting[1](null); });
+    }, 200);
   };
 
   return (
