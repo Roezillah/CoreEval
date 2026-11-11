@@ -11,12 +11,28 @@
     .safe-area-top { padding-top: max(0.75rem, env(safe-area-inset-top)); }
     .safe-area-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
     body { margin: 0; }
-    .report-photo {
+    
+    /* Strict aspect-ratio protection for all photo renders and html2canvas exports */
+    .report-photo-wrapper {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
       width: 100% !important;
+      max-height: 320px !important;
+      background-color: #f4f4f5 !important;
+      border-radius: 0.75rem !important;
+      overflow: hidden !important;
+      margin-top: 0.625rem !important;
+      border: 1px solid #e4e4e7 !important;
+    }
+    .report-photo-wrapper img {
+      width: auto !important;
       height: auto !important;
-      max-height: 280px !important;
+      max-width: 100% !important;
+      max-height: 320px !important;
       object-fit: contain !important;
       display: block !important;
+      margin: 0 auto !important;
     }
   </style>
 </head>
@@ -261,7 +277,7 @@ function compressPhoto(file, maxDim, quality) {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", quality || 0.75));
+        resolve(canvas.toDataURL("image/jpeg", quality || 0.8));
       };
       img.src = reader.result;
     };
@@ -291,8 +307,8 @@ function PhotoBox(props) {
         </label>
       </div>
       {props.photo && (
-        <div className="relative mt-2 bg-zinc-950/5 rounded-xl overflow-hidden border border-zinc-200">
-          <img src={props.photo} className="w-full h-auto max-h-56 object-contain rounded-xl" />
+        <div className="relative mt-2 bg-zinc-100 rounded-xl overflow-hidden border border-zinc-200 flex items-center justify-center p-1">
+          <img src={props.photo} className="w-auto h-auto max-h-56 max-w-full object-contain rounded-lg" />
           <button onClick={function() { props.onChange(null); }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black bg-opacity-60 text-white flex items-center justify-center hover:bg-opacity-80 transition-opacity"><I.X className="w-4 h-4" /></button>
         </div>
       )}
@@ -1082,8 +1098,8 @@ function ReportPage(props) {
                         <p className="text-xs text-zinc-700 mt-0.5 leading-tight">{item.title}</p>
                         {item.notes && <p className="text-[10px] text-blue-500 mt-1 italic">{item.notes}</p>}
                         {item.photo && (
-                          <div className="mt-2.5 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-900/5">
-                            <img src={item.photo} alt={item.title} className="report-photo" />
+                          <div className="report-photo-wrapper">
+                            <img src={item.photo} alt={item.title} />
                           </div>
                         )}
                       </div>
