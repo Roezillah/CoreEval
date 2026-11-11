@@ -90,7 +90,7 @@ function calculateScores(responses) {
     else if (item.tiered && response.status === "tiered") earned = response.tieredScore || 0;
     catResult.earned += earned;
     results.overall.earned += earned;
-    catResult.items.push(Object.assign({}, item, { earned: earned, status: response.status, notes: response.notes }));
+    catResult.items.push(Object.assign({}, item, { earned: earned, status: response.status, notes: response.notes, photo: response.photo }));
   });
   WATCHOUTS.forEach(function(wo) {
     if (responses[wo.id] && responses[wo.id].status === "fail") results.watchoutDeductions += wo.points;
@@ -120,6 +120,8 @@ var I = {
   Clip: function(c) { return <Svg className={c.className}><path d="M9 2h6a1 1 0 0 1 1 1v1H8V3a1 1 0 0 1 1-1z"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><polyline points="9 14 11 16 15 12"/></Svg>; },
   Rotate: function(c) { return <Svg className={c.className}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></Svg>; },
   ListChecks: function(c) { return <Svg className={c.className}><path d="M3 17l2 2 4-4"/><path d="M3 7l2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></Svg>; },
+  Camera: function(c) { return <Svg className={c.className}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></Svg>; },
+  Library: function(c) { return <Svg className={c.className}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></Svg>; },
   Card: function(c) { return <Svg className={c.className}><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></Svg>; },
   List: function(c) { return <Svg className={c.className}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></Svg>; },
   Store: function(c) { return <Svg className={c.className}><path d="M3 9l2-5h14l2 5"/><path d="M3 9v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/><path d="M3 9h18"/><path d="M9 20v-7h6v7"/></Svg>; },
@@ -193,6 +195,61 @@ function CategoryProgress(props) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function compressPhoto(file, maxDim, quality) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onerror = function() { reject(new Error("Could not read that photo.")); };
+    reader.onload = function() {
+      var img = new window.Image();
+      img.onerror = function() { reject(new Error("Could not read that photo.")); };
+      img.onload = function() {
+        var ratio = Math.min(1, (maxDim || 1200) / Math.max(img.width, img.height));
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        var ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality || 0.72));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function PhotoBox(props) {
+  var busy = useState(false);
+  var handle = function(e) {
+    var f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    busy[1](true);
+    compressPhoto(f).then(function(d) { props.onChange(d); busy[1](false); }, function() { busy[1](false); });
+  };
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600">
+          {busy[0] ? <div className="w-3.5 h-3.5 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" /> : <I.Camera className="w-3.5 h-3.5" />} Photo
+          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handle} />
+        </label>
+        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600">
+          <I.Library className="w-3.5 h-3.5" /> Library
+          <input type="file" accept="image/*" className="hidden" onChange={handle} />
+        </label>
+      </div>
+      {props.photo && (
+        <div className="relative mt-2">
+          <img src={props.photo} className="w-full max-h-44 object-cover rounded-xl border border-zinc-200" />
+          <button onClick={function() { props.onChange(null); }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black bg-opacity-60 text-white flex items-center justify-center"><I.X className="w-4 h-4" /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -322,6 +379,10 @@ function ChecklistItem(props) {
         )}
 
         <textarea value={notes[0]} onChange={function(e) { notes[1](e.target.value); }} onBlur={handleNotesBlur} placeholder="Add notes..." className="w-full h-16 text-sm border rounded-lg p-2 resize-none mt-3" />
+
+        <div className="mt-3">
+          <PhotoBox photo={response.photo} onChange={function(p) { onUpdate(item.id, Object.assign({}, response, { photo: p })); }} />
+        </div>
       </div>
     );
   }
@@ -400,6 +461,8 @@ function ChecklistItem(props) {
             </div>
           )}
           <textarea value={notes[0]} onChange={function(e) { notes[1](e.target.value); }} onBlur={handleNotesBlur} placeholder="Add notes..." className="w-full h-16 text-sm border rounded-lg p-2 resize-none" />
+
+          <PhotoBox photo={response.photo} onChange={function(p) { onUpdate(item.id, Object.assign({}, response, { photo: p })); }} />
         </div>
       )}
     </div>
@@ -795,18 +858,21 @@ function ReportPage(props) {
     return L.join("\n");
   };
 
+  var RENDER_W = 794;
+  var MAX_PX = 9000000;
+
   var createExportContainer = function() {
     var clone = reportRef.current.cloneNode(true);
-    clone.style.width = "794px";
-    clone.style.maxWidth = "794px";
-    clone.style.padding = "48px 40px";
+    clone.style.width = RENDER_W + "px";
+    clone.style.maxWidth = RENDER_W + "px";
+    clone.style.padding = "40px 36px";
     clone.style.boxSizing = "border-box";
     clone.style.background = "#ffffff";
     var wrapper = document.createElement("div");
     wrapper.style.position = "absolute";
     wrapper.style.left = "-9999px";
     wrapper.style.top = "0";
-    wrapper.style.width = "794px";
+    wrapper.style.width = RENDER_W + "px";
     wrapper.style.background = "#ffffff";
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
@@ -817,29 +883,71 @@ function ReportPage(props) {
     if (c && c.parentNode) c.parentNode.removeChild(c);
   };
 
+  var captureReport = function() {
+    var c = createExportContainer();
+    var height = c.scrollHeight || 1000;
+    var scale = 2;
+    if (RENDER_W * height * scale * scale > MAX_PX) {
+      scale = Math.max(0.8, Math.sqrt(MAX_PX / (RENDER_W * height)));
+    }
+    return html2canvas(c, { scale: scale, useCORS: true, backgroundColor: "#ffffff", windowWidth: RENDER_W })
+      .then(function(canvas) { cleanupContainer(c); return canvas; })
+      ["catch"](function(err) { cleanupContainer(c); throw err; });
+  };
+
+  var buildPdf = function(canvas) {
+    var pdf = new jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    var margin = 8;
+    var usableW = 210 - margin * 2;
+    var usableH = 297 - margin * 2;
+    var pxPerMm = canvas.width / usableW;
+    var sliceH = Math.floor(usableH * pxPerMm);
+    var y = 0, page = 0;
+    while (y < canvas.height) {
+      var h = Math.min(sliceH, canvas.height - y);
+      var slice = document.createElement("canvas");
+      slice.width = canvas.width;
+      slice.height = h;
+      var ctx = slice.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, slice.width, slice.height);
+      ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+      if (page > 0) pdf.addPage();
+      pdf.addImage(slice.toDataURL("image/jpeg", 0.9), "JPEG", margin, margin, usableW, h / pxPerMm);
+      page++;
+      y += h;
+    }
+    return pdf;
+  };
+
+  var downloadFile = function(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.download = filename;
+    link.href = url;
+    link.click();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
+  };
+
+  var baseName = function() {
+    return "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10);
+  };
+
   var handleShare = function() {
     exporting[1]("share");
-    var c = createExportContainer();
     setTimeout(function() {
-    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794 }).then(function(canvas) {
-      cleanupContainer(c);
-      var filename = "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".png";
-      canvas.toBlob(function(blob) {
-        var file = new File([blob], filename, { type: "image/png" });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file], title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: "CORE 2026 Evaluation Report" }).then(function() { exporting[1](null); }, function() { exporting[1](null); });
-        } else if (navigator.share) {
-          navigator.share({ title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: generateTextReport() }).then(function() { exporting[1](null); }, function() { exporting[1](null); });
+      captureReport().then(function(canvas) {
+        var pdf = buildPdf(canvas);
+        var blob = pdf.output("blob");
+        var file = new File([blob], baseName() + ".pdf", { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: "CORE 2026 Evaluation Report" })
+            .then(function() { exporting[1](null); }, function() { exporting[1](null); });
         } else {
-          var link = document.createElement("a");
-          link.download = filename;
-          link.href = URL.createObjectURL(blob);
-          link.click();
-          URL.revokeObjectURL(link.href);
+          downloadFile(blob, baseName() + ".pdf");
           exporting[1](null);
         }
-      }, "image/png");
-    })["catch"](function() { cleanupContainer(c); alert("Share failed."); exporting[1](null); });
+      })["catch"](function() { alert("Could not create the file."); exporting[1](null); });
     }, 200);
   };
 
@@ -856,44 +964,25 @@ function ReportPage(props) {
 
   var exportPNG = function() {
     exporting[1]("png");
-    var c = createExportContainer();
     setTimeout(function() {
-    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794 }).then(function(canvas) {
-      cleanupContainer(c);
-      var link = document.createElement("a");
-      link.download = "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-      exporting[1](null);
-    })["catch"](function() { cleanupContainer(c); alert("Export failed."); exporting[1](null); });
+      captureReport().then(function(canvas) {
+        canvas.toBlob(function(blob) {
+          if (blob) downloadFile(blob, baseName() + ".png");
+          else alert("Could not create the image.");
+          exporting[1](null);
+        }, "image/png");
+      })["catch"](function() { alert("Could not create the image."); exporting[1](null); });
     }, 200);
   };
 
   var exportPDF = function() {
     exporting[1]("pdf");
-    var c = createExportContainer();
     setTimeout(function() {
-    html2canvas(c, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794 }).then(function(canvas) {
-      cleanupContainer(c);
-      var imgData = canvas.toDataURL("image/png");
-      var pdf = new jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      var pdfW = 210, pdfH = 297, margin = 10;
-      var imgW = pdfW - margin * 2;
-      var imgH = canvas.height * imgW / canvas.width;
-      var usableH = pdfH - margin * 2;
-      var heightLeft = imgH;
-      var position = margin;
-      pdf.addImage(imgData, "PNG", margin, position, imgW, imgH);
-      heightLeft -= usableH;
-      while (heightLeft > 0) {
-        position = margin - (imgH - heightLeft);
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", margin, position, imgW, imgH);
-        heightLeft -= usableH;
-      }
-      pdf.save("core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10) + ".pdf");
-      exporting[1](null);
-    })["catch"](function() { cleanupContainer(c); alert("Export failed."); exporting[1](null); });
+      captureReport().then(function(canvas) {
+        var pdf = buildPdf(canvas);
+        pdf.save(baseName() + ".pdf");
+        exporting[1](null);
+      })["catch"](function() { alert("Could not create the PDF."); exporting[1](null); });
     }, 200);
   };
 
@@ -991,6 +1080,7 @@ function ReportPage(props) {
                         </div>
                         <p className="text-xs text-zinc-700 mt-0.5 leading-tight">{item.title}</p>
                         {item.notes && <p className="text-[10px] text-blue-500 mt-1 italic">{item.notes}</p>}
+                        {item.photo && <img src={item.photo} className="mt-2 w-full max-h-40 object-cover rounded-lg border border-zinc-200" />}
                       </div>
                     </div>
                   );
