@@ -450,22 +450,34 @@ function WatchoutItem(props) {
   }
 
   return (
-    <div className={"border rounded-xl px-4 py-3 flex items-center justify-between transition-all " + (status === "fail" ? "border-red-300 bg-red-50" : "border-zinc-200 bg-white")}>
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <I.Alert className={"w-4 h-4 flex-shrink-0 " + (status === "fail" ? "text-red-500" : "text-amber-400")} />
-        <div>
-          <p className="text-sm font-medium text-zinc-800">{wo.title}</p>
-          <p className="text-xs text-zinc-400">-{wo.points} pts if triggered</p>
+    <div className={"border rounded-xl overflow-hidden transition-all " + (status === "fail" ? "border-red-300 bg-red-50/40" : "border-zinc-200 bg-white")}>
+      <div className="px-4 py-3 flex items-center justify-between gap-2">
+        <button onClick={function() { showChecks[1](!showChecks[0]); }} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+          <I.Alert className={"w-4 h-4 flex-shrink-0 " + (status === "fail" ? "text-red-500" : "text-amber-400")} />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-800 leading-tight">{wo.title}</p>
+            <p className="text-xs text-zinc-400">-{wo.points} pts if triggered</p>
+          </div>
+          {showChecks[0] ? <I.Up className="w-4 h-4 text-zinc-400 flex-shrink-0" /> : <I.Down className="w-4 h-4 text-zinc-400 flex-shrink-0" />}
+        </button>
+        <div className="flex gap-2 flex-shrink-0">
+          <button onClick={function() { onUpdate(wo.id, { status: "pass" }); }} className={"w-9 h-9 rounded-lg flex items-center justify-center transition-all " + (status === "pass" ? "bg-emerald-500 text-white" : "bg-zinc-100 text-zinc-400")}>
+            <I.Check className="w-4 h-4" />
+          </button>
+          <button onClick={function() { onUpdate(wo.id, { status: "fail" }); }} className={"w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all " + (status === "fail" ? "bg-red-500 text-white" : "bg-zinc-100 text-zinc-400")}>
+            !
+          </button>
         </div>
       </div>
-      <div className="flex gap-2 ml-2">
-        <button onClick={function() { onUpdate(wo.id, { status: "pass" }); }} className={"w-9 h-9 rounded-lg flex items-center justify-center transition-all " + (status === "pass" ? "bg-emerald-500 text-white" : "bg-zinc-100 text-zinc-400")}>
-          <I.Check className="w-4 h-4" />
-        </button>
-        <button onClick={function() { onUpdate(wo.id, { status: "fail" }); }} className={"w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all " + (status === "fail" ? "bg-red-500 text-white" : "bg-zinc-100 text-zinc-400")}>
-          !
-        </button>
-      </div>
+      {showChecks[0] && wo.checks && wo.checks.length > 0 && (
+        <div className="px-4 pb-3">
+          <ul className="bg-red-50 border border-red-100 rounded-lg p-3 space-y-1.5">
+            {wo.checks.map(function(check, i) {
+              return <li key={i} className="flex items-start gap-2 text-xs text-zinc-600"><span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />{check}</li>;
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -926,12 +938,14 @@ function ReportPage(props) {
               var cs = scores.categories[cat.id]; if (!cs || cs.possible === 0) return null;
               var cp = cs.possible > 0 ? Math.round((cs.earned / cs.possible) * 100) : 0;
               return (
-                <div key={cat.id} className="flex items-center gap-2 text-xs">
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                  <span className="flex-1 text-zinc-600 truncate">{cat.name}</span>
-                  <span className="text-zinc-400">{cs.earned}/{cs.possible}</span>
-                  <span className="font-bold text-zinc-800 w-10 text-right">{cp}%</span>
-                  <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden flex-shrink-0"><div className="h-full rounded-full" style={{ width: cp + "%", backgroundColor: cat.color }} /></div>
+                <div key={cat.id} className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                    <span className="flex-1 text-zinc-700 font-medium leading-tight">{cat.name}</span>
+                    <span className="text-zinc-400 flex-shrink-0">{cs.earned}/{cs.possible}</span>
+                    <span className="font-bold text-zinc-800 w-10 text-right flex-shrink-0">{cp}%</span>
+                  </div>
+                  <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden ml-4"><div className="h-full rounded-full" style={{ width: cp + "%", backgroundColor: cat.color }} /></div>
                 </div>
               );
             })}
@@ -991,7 +1005,7 @@ function ReportPage(props) {
               <div className="space-y-1">
                 <h4 className="text-xs font-bold text-zinc-400 mt-2">Not Applicable</h4>
                 {naItems.map(function(item) {
-                  return <div key={item.id} className="bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 flex items-center gap-2"><I.Minus className="w-4 h-4 text-zinc-300" /><span className="text-[10px] font-mono text-zinc-400">{item.code}</span><span className="text-xs text-zinc-500 truncate">{item.title}</span></div>;
+                  return <div key={item.id} className="bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 flex items-center gap-2"><I.Minus className="w-4 h-4 text-zinc-300 flex-shrink-0" /><span className="text-[10px] font-mono text-zinc-400 flex-shrink-0">{item.code}</span><span className="text-xs text-zinc-500 leading-tight">{item.title}</span></div>;
                 })}
               </div>
             );
