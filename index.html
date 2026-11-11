@@ -22,6 +22,47 @@
   <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script type="text/babel">
 const { useState, useEffect, useMemo, useRef } = React;
+const ReportFileDialog = (function createReportFileDialog(React) {
+  const { createElement: h, useEffect, useRef, useState } = React;
+  return function ReportFileDialog({ file, onClose }) {
+    const dialog = useRef(null);
+    const [url, setUrl] = useState("");
+    const [error, setError] = useState("");
+    const [sharing, setSharing] = useState(false);
+    useEffect(() => {
+      const objectUrl = URL.createObjectURL(file);
+      setUrl(objectUrl);
+      dialog.current.showModal();
+      return () => URL.revokeObjectURL(objectUrl);
+    }, [file]);
+    const supported = !!navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }));
+    const share = async () => {
+      setError("");
+      setSharing(true);
+      try {
+        // Invoke immediately from this tap: never render, wait, or read a file first.
+        // Share only the file; extra text can become a separate AirDrop attachment.
+        await navigator.share({ files: [file] });
+      } catch (e) {
+        setError(e.name === "AbortError" ?
+        "Sharing was cancelled or did not finish. The file is still ready to retry or save." :
+        "Sharing could not finish (" + (e.name || "sharing error") + "). Save File, then use Share > AirDrop in the Files app.");
+      } finally {setSharing(false);}
+    };
+    const linkClass = "flex-1 rounded-xl border border-border p-3 text-center text-sm font-semibold";
+    return h("dialog", { ref: dialog, onCancel: onClose, "aria-labelledby": "report-file-title", className: "w-[calc(100%_-_2rem)] max-w-md rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-xl" },
+    h("h2", { id: "report-file-title", className: "text-lg font-semibold" }, "Report file ready"),
+    h("p", { className: "mt-2 break-words text-sm" }, file.name),
+    h("p", { className: "mb-4 mt-1 text-xs" }, (file.size / 1024 / 1024).toFixed(2) + " MB"),
+    supported && h("button", { type: "button", onClick: share, disabled: sharing, className: "w-full rounded-xl border border-border p-3 text-sm font-semibold disabled:opacity-50" }, sharing ? "Sharing…" : "Share / AirDrop"),
+    h("p", { className: "my-3 text-sm" }, supported ? "Tap Share / AirDrop, then choose your Mac. If the transfer fails, save the file and share it from the Files app." : "This browser cannot share files directly. Open or save the file, then use the iPhone's Share > AirDrop. A downloaded app must be opened in a browser that runs it, not the Files preview."),
+    h("div", { className: "flex gap-2" },
+    h("a", { href: url || undefined, target: "_blank", rel: "noopener noreferrer", className: linkClass }, "Open File"),
+    h("a", { href: url || undefined, download: file.name, className: linkClass }, "Save File")),
+    error && h("p", { role: "alert", className: "mt-3 text-sm text-destructive" }, error),
+    h("button", { type: "button", onClick: onClose, disabled: sharing, className: "mt-4 w-full rounded-xl border border-border p-3 text-sm disabled:opacity-50" }, "Close"));
+  };
+})(React);
 
 const CATEGORIES = [
   { id: "serving", name: "Serving Up Más", color: "#E91E63", subcategories: ["The Customer Experience", "Customer Shop Review"] },
@@ -920,36 +961,29 @@ function ReportPage(props) {
     return pdf;
   };
 
-  var downloadFile = function(blob, filename) {
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement("a");
-    link.download = filename;
-    link.href = url;
-    link.click();
-    setTimeout(function() { URL.revokeObjectURL(url); }, 4000);
-  };
-
   var baseName = function() {
-    return "core-report-" + (meta.storeNumber || "eval") + "-" + new Date().toISOString().slice(0,10);
+    return "core-report-" + String(meta.storeNumber || "eval").replace(/[^a-zA-Z0-9_-]/g, "-") + "-" + new Date().toISOString().slice(0,10);
   };
 
-  var handleShare = function() {
-    exporting[1]("share");
-    setTimeout(function() {
-      captureReport().then(function(canvas) {
-        var pdf = buildPdf(canvas);
-        var blob = pdf.output("blob");
-        var file = new File([blob], baseName() + ".pdf", { type: "application/pdf" });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file], title: "CORE Evaluation - Store " + (meta.storeNumber || ""), text: "CORE 2026 Evaluation Report" })
-            .then(function() { exporting[1](null); }, function() { exporting[1](null); });
-        } else {
-          downloadFile(blob, baseName() + ".pdf");
-          exporting[1](null);
-        }
-      })["catch"](function() { alert("Could not create the file."); exporting[1](null); });
-    }, 200);
+  var prepareExport = async function(format, action) {
+    exporting[1](action || format);
+    exportError[1]("");
+    var canvas;
+    try {
+      canvas = await captureReport();
+      var blob = format === "png" ? await new Promise(function(resolve, reject) {
+        canvas.toBlob(function(value) { if (value) resolve(value); else reject(new Error("Could not create the image.")); }, "image/png");
+      }) : buildPdf(canvas).output("blob");
+      if (!blob.size) throw new Error("The generated file was empty.");
+      preparedFile[1](new File([blob], baseName() + "." + format, { type: format === "png" ? "image/png" : "application/pdf" }));
+    } catch (e) {
+      exportError[1]("Could not prepare the report: " + (e.message || "Please try again."));
+    } finally {
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
+      exporting[1](null);
+    }
   };
+  var handleShare = function() { return prepareExport("pdf", "share"); };
 
   var getStatusIcon = function(status) {
     if (status === "pass") return <I.Check className="w-4 h-4 text-emerald-500" />;
@@ -960,31 +994,11 @@ function ReportPage(props) {
 
   var reportRef = useRef(null);
   var exporting = useState(null);
+  var preparedFile = useState(null);
+  var exportError = useState("");
   var triggeredCount = WATCHOUTS.filter(function(w) { return responses[w.id] && responses[w.id].status === "fail"; }).length;
-
-  var exportPNG = function() {
-    exporting[1]("png");
-    setTimeout(function() {
-      captureReport().then(function(canvas) {
-        canvas.toBlob(function(blob) {
-          if (blob) downloadFile(blob, baseName() + ".png");
-          else alert("Could not create the image.");
-          exporting[1](null);
-        }, "image/png");
-      })["catch"](function() { alert("Could not create the image."); exporting[1](null); });
-    }, 200);
-  };
-
-  var exportPDF = function() {
-    exporting[1]("pdf");
-    setTimeout(function() {
-      captureReport().then(function(canvas) {
-        var pdf = buildPdf(canvas);
-        pdf.save(baseName() + ".pdf");
-        exporting[1](null);
-      })["catch"](function() { alert("Could not create the PDF."); exporting[1](null); });
-    }, 200);
-  };
+  var exportPNG = function() { return prepareExport("png"); };
+  var exportPDF = function() { return prepareExport("pdf"); };
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -1118,6 +1132,7 @@ function ReportPage(props) {
         </div>
       </div>
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 px-4 py-3 safe-area-bottom space-y-2">
+        {exportError[0] && <p role="alert" className="text-sm text-red-600">{exportError[0]}</p>}
         <div className="flex gap-2">
           <button onClick={exportPNG} disabled={!!exporting[0]} className="flex-1 h-11 border border-zinc-200 rounded-xl flex items-center justify-center gap-2 text-sm font-medium text-zinc-700 disabled:opacity-50">
             {exporting[0] === "png" ? <div className="w-4 h-4 border-2 border-zinc-300 border-t-zinc-700 rounded-full animate-spin" /> : <I.File className="w-4 h-4" />}
@@ -1133,6 +1148,7 @@ function ReportPage(props) {
           <button onClick={handleShare} disabled={!!exporting[0]} className="flex-1 h-11 bg-purple-600 text-white rounded-xl flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50">{exporting[0] === "share" ? <div className="w-4 h-4 border-2 border-purple-200 border-t-white rounded-full animate-spin" /> : <I.Share className="w-4 h-4" />} {exporting[0] === "share" ? "Generating..." : "Share Report"}</button>
         </div>
       </div>
+      {preparedFile[0] && <ReportFileDialog file={preparedFile[0]} onClose={function() { preparedFile[1](null); }} />}
     </div>
   );
 }
