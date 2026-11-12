@@ -40,6 +40,8 @@ const ReportFileDialog = (function createReportFileDialog(React) {
       setError("");
       setSharing(true);
       try {
+        // Invoke immediately from this tap: never render, wait, or read a file first.
+        // Share only the file; extra text can become a separate AirDrop attachment.
         await navigator.share({ files: [file] });
       } catch (e) {
         setError(e.name === "AbortError" ?
@@ -216,7 +218,7 @@ function CategoryProgress(props) {
         });
         var pct = possible > 0 ? Math.round((earned / possible) * 100) : null;
         return (
-          <div key={cat.id} className="bg-white border border-zinc-200 rounded-xl p-3">
+          <button key={cat.id} onClick={function() { if (props.onSelect) props.onSelect(cat.id); }} className={"text-left bg-white border rounded-xl p-3 transition-all " + (props.activeId === cat.id ? "shadow-sm" : "")} style={{ borderColor: props.activeId === cat.id ? cat.color : undefined, boxShadow: props.activeId === cat.id ? "inset 0 0 0 1.5px " + cat.color : undefined }}>
             <div className="flex items-center gap-2 mb-1.5">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
               <span className="text-xs font-semibold text-zinc-700 truncate">{cat.name}</span>
@@ -231,9 +233,26 @@ function CategoryProgress(props) {
             <div className="mt-1.5 h-1 bg-zinc-100 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-500" style={{ width: (pct || 0) + "%", backgroundColor: cat.color }} />
             </div>
-          </div>
+          </button>
         );
       })}
+      <button onClick={function() { if (props.onSelect) props.onSelect("watchouts"); }} className={"text-left bg-white border rounded-xl p-3 transition-all " + (props.activeId === "watchouts" ? "shadow-sm" : "")} style={props.activeId === "watchouts" ? { borderColor: "#ef4444", boxShadow: "inset 0 0 0 1.5px #ef4444" } : undefined}>
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="w-2 h-2 rounded-full bg-red-500" />
+          <span className="text-xs font-semibold text-zinc-700 truncate">Watch-Outs</span>
+        </div>
+        <div className="flex items-end justify-between">
+          <div>
+            <span className="text-lg font-bold text-zinc-900">{WATCHOUTS.filter(function(w) { return responses[w.id] && responses[w.id].status === "fail"; }).length}</span>
+            <span className="text-xs text-zinc-400 ml-1">triggered</span>
+          </div>
+          <span className="text-[10px] text-zinc-400">{WATCHOUTS.filter(function(w) { return responses[w.id] && responses[w.id].status; }).length}/{WATCHOUTS.length}</span>
+        </div>
+        <div className="mt-1.5 h-1 bg-zinc-100 rounded-full overflow-hidden">
+          <div className="h-full bg-red-500 rounded-full transition-all duration-500" style={{ width: (WATCHOUTS.filter(function(w) { return responses[w.id] && responses[w.id].status; }).length / WATCHOUTS.length * 100) + "%" }} />
+        </div>
+      </button>
+      {props.trailing}
     </div>
   );
 }
@@ -254,7 +273,7 @@ function compressPhoto(file, maxDim, quality) {
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", quality || 0.8));
+        resolve(canvas.toDataURL("image/jpeg", quality || 0.72));
       };
       img.src = reader.result;
     };
@@ -274,78 +293,20 @@ function PhotoBox(props) {
   return (
     <div>
       <div className="flex items-center gap-2">
-        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600 cursor-pointer">
+        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600">
           {busy[0] ? <div className="w-3.5 h-3.5 border-2 border-zinc-300 border-t-zinc-600 rounded-full animate-spin" /> : <I.Camera className="w-3.5 h-3.5" />} Photo
           <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handle} />
         </label>
-        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600 cursor-pointer">
+        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600">
           <I.Library className="w-3.5 h-3.5" /> Library
           <input type="file" accept="image/*" className="hidden" onChange={handle} />
         </label>
       </div>
       {props.photo && (
-        <div className="relative mt-2 bg-zinc-100 rounded-xl overflow-hidden border border-zinc-200 flex items-center justify-center p-1">
-          <img src={props.photo} className="w-auto h-auto max-h-56 max-w-full object-contain rounded-lg" />
-          <button onClick={function() { props.onChange(null); }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black bg-opacity-60 text-white flex items-center justify-center hover:bg-opacity-80 transition-opacity"><I.X className="w-4 h-4" /></button>
+        <div className="relative mt-2">
+          <img src={props.photo} className="w-full max-h-44 object-cover rounded-xl border border-zinc-200" />
+          <button onClick={function() { props.onChange(null); }} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black bg-opacity-60 text-white flex items-center justify-center"><I.X className="w-4 h-4" /></button>
         </div>
-      )}
-    </div>
-  );
-}
-
-function ReportImage(props) {
-  const [dims, setDims] = useState({ width: 0, height: 0, ready: false });
-
-  useEffect(() => {
-    if (!props.src) return;
-    const img = new Image();
-    img.onload = () => {
-      const maxW = 540;
-      const maxH = 420;
-      let w = img.naturalWidth || img.width || maxW;
-      let h = img.naturalHeight || img.height || maxH;
-      const aspect = w / h;
-
-      if (w > maxW) {
-        w = maxW;
-        h = Math.round(maxW / aspect);
-      }
-      if (h > maxH) {
-        h = maxH;
-        w = Math.round(maxH * aspect);
-      }
-      setDims({ width: w, height: h, ready: true });
-    };
-    img.src = props.src;
-  }, [props.src]);
-
-  return (
-    <div style={{
-      width: "100%",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      marginTop: "12px",
-      backgroundColor: "#f4f4f5",
-      borderRadius: "10px",
-      padding: "8px",
-      border: "1px solid #e4e4e7",
-      boxSizing: "border-box"
-    }}>
-      {dims.ready && (
-        <img
-          src={props.src}
-          alt={props.alt || "Attachment"}
-          width={dims.width}
-          height={dims.height}
-          style={{
-            width: dims.width + "px",
-            height: dims.height + "px",
-            maxWidth: "100%",
-            borderRadius: "6px",
-            display: "block"
-          }}
-        />
       )}
     </div>
   );
@@ -532,9 +493,9 @@ function ChecklistItem(props) {
             ) : (
               <button onClick={function() { handleStatus("fail"); }} className={"flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all " + getStatusStyle("fail")}>
                 <I.X className="w-4 h-4" /> Fail
-              </button>
-            )}
-            <button onClick={function() { handleStatus("na"); }} className={"flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all " + getStatusStyle("na")}>
+                </button>
+                )}
+                <button onClick={function() { handleStatus("na"); }} className={"flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all " + getStatusStyle("na")}>
               <I.Minus className="w-4 h-4" /> N/A
             </button>
           </div>
@@ -806,6 +767,14 @@ function EvaluatePage(props) {
     viewMode[1]("card");
   };
 
+  var selectSection = function(id) {
+    activeTab[1](id);
+    if (viewMode[0] === "card") {
+      var idx = allCards.findIndex(function(c) { return id === "watchouts" ? c.type === "watchout" : c.data && c.data.category === id; });
+      cardIndex[1](idx >= 0 ? idx : 0);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
       <div className="bg-white border-b border-zinc-200 px-4 pt-3 pb-3 safe-area-top">
@@ -822,23 +791,17 @@ function EvaluatePage(props) {
           <span className="text-[10px] text-zinc-400 font-medium">{answeredItems}/{totalItems}</span>
         </div>
       </div>
-      <div className="px-4 py-3"><CategoryProgress responses={responses[0]} /></div>
-      <div className="px-4 pb-2">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex bg-zinc-100 rounded-lg p-0.5 flex-shrink-0">
-            <button onClick={function() { viewMode[1]("list"); }} className={"flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all " + (viewMode[0] === "list" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500")}>
+      <div className="px-4 py-3">
+        <CategoryProgress responses={responses[0]} activeId={activeTab[0]} onSelect={selectSection} trailing={
+          <div className="bg-white border border-zinc-200 rounded-xl p-1.5 flex gap-1">
+            <button onClick={function() { viewMode[1]("list"); }} className={"flex-1 flex items-center justify-center gap-1 rounded-lg text-xs font-semibold transition-all " + (viewMode[0] === "list" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500")}>
               <I.List className="w-3.5 h-3.5" /> List
             </button>
-            <button onClick={switchToCardMode} className={"flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all " + (viewMode[0] === "card" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500")}>
+            <button onClick={switchToCardMode} className={"flex-1 flex items-center justify-center gap-1 rounded-lg text-xs font-semibold transition-all " + (viewMode[0] === "card" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500")}>
               <I.Card className="w-3.5 h-3.5" /> Cards
             </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
-            {TABS.map(function(tab) {
-              return <button key={tab.id} onClick={function() { activeTab[1](tab.id); if (viewMode[0] === "card") { var idx = allCards.findIndex(function(c) { return tab.id === "watchouts" ? c.type === "watchout" : c.data && c.data.category === tab.id; }); cardIndex[1](idx >= 0 ? idx : 0); } }} className={"flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap " + (activeTab[0] === tab.id ? "text-white" : "bg-white text-zinc-600 border border-zinc-200")} style={activeTab[0] === tab.id ? { backgroundColor: tab.color } : {}}>{tab.label}</button>;
-            })}
-          </div>
-        </div>
+        } />
       </div>
       <div className="flex-1 px-4 pb-24 space-y-4">
         {viewMode[0] === "card" ? (
@@ -919,6 +882,42 @@ function ReportPage(props) {
   var C = 2 * Math.PI * 50;
   var off = C - (pct / 100) * C;
 
+  var generateTextReport = function() {
+    var L = [];
+    L.push("CORE INTERNATIONAL 2026 - EVALUATION REPORT");
+    L.push("=".repeat(50));
+    L.push("Store: " + (meta.storeNumber || "N/A"));
+    L.push("Evaluator: " + (meta.evaluatorName || "N/A"));
+    L.push("Date: " + (meta.startTime ? new Date(meta.startTime).toLocaleDateString() : "N/A"));
+    L.push("");
+    L.push("OVERALL SCORE: " + scores.overall.earned + "/" + scores.overall.possible + " (" + pct + "%)");
+    L.push("STATUS: " + (passing ? "AT STANDARD" : "NOT AT STANDARD"));
+    L.push("POINTS LOST: " + lost + " (limit: 20)");
+    if (scores.watchoutDeductions > 0) L.push("Watch-Out Deductions: -" + scores.watchoutDeductions + " pts");
+    L.push("");
+    L.push("=".repeat(50));
+    CATEGORIES.forEach(function(cat) {
+      var cs = scores.categories[cat.id];
+      if (!cs) return;
+      var cp = cs.possible > 0 ? Math.round((cs.earned / cs.possible) * 100) : 0;
+      L.push("");
+      L.push(cat.name.toUpperCase() + ": " + cs.earned + "/" + cs.possible + " (" + cp + "%)");
+      L.push("-".repeat(40));
+      cs.items.forEach(function(item) {
+        var icon = item.status === "pass" ? "[PASS]" : item.status === "fail" ? "[FAIL]" : item.status === "tiered" ? "[TIMED]" : "[--]";
+        L.push(icon + " " + item.code + ": " + item.title + " - " + item.earned + "/" + item.points);
+        if (item.notes) L.push("  Notes: " + item.notes);
+      });
+    });
+    var triggered = WATCHOUTS.filter(function(w) { return responses[w.id] && responses[w.id].status === "fail"; });
+    if (triggered.length > 0) {
+      L.push("");
+      L.push("WATCH-OUTS TRIGGERED:");
+      triggered.forEach(function(w) { L.push("[!] " + w.title + " (-" + w.points + " pts)"); });
+    }
+    return L.join("\n");
+  };
+
   var RENDER_W = 794;
   var MAX_PX = 9000000;
 
@@ -944,34 +943,16 @@ function ReportPage(props) {
     if (c && c.parentNode) c.parentNode.removeChild(c);
   };
 
-  var waitForImages = function(container) {
-    var imgs = Array.from(container.querySelectorAll("img"));
-    var promises = imgs.map(function(img) {
-      if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-      return new Promise(function(resolve) {
-        img.onload = resolve;
-        img.onerror = resolve;
-      });
-    });
-    return Promise.all(promises);
-  };
-
   var captureReport = function() {
     var c = createExportContainer();
-    return waitForImages(c).then(function() {
-      var height = c.scrollHeight || 1000;
-      var scale = 2;
-      if (RENDER_W * height * scale * scale > MAX_PX) {
-        scale = Math.max(0.8, Math.sqrt(MAX_PX / (RENDER_W * height)));
-      }
-      return html2canvas(c, { scale: scale, useCORS: true, backgroundColor: "#ffffff", windowWidth: RENDER_W });
-    }).then(function(canvas) {
-      cleanupContainer(c);
-      return canvas;
-    }).catch(function(err) {
-      cleanupContainer(c);
-      throw err;
-    });
+    var height = c.scrollHeight || 1000;
+    var scale = 2;
+    if (RENDER_W * height * scale * scale > MAX_PX) {
+      scale = Math.max(0.8, Math.sqrt(MAX_PX / (RENDER_W * height)));
+    }
+    return html2canvas(c, { scale: scale, useCORS: true, backgroundColor: "#ffffff", windowWidth: RENDER_W })
+      .then(function(canvas) { cleanupContainer(c); return canvas; })
+      ["catch"](function(err) { cleanupContainer(c); throw err; });
   };
 
   var buildPdf = function(canvas) {
@@ -992,7 +973,7 @@ function ReportPage(props) {
       ctx.fillRect(0, 0, slice.width, slice.height);
       ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
       if (page > 0) pdf.addPage();
-      pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", margin, margin, usableW, h / pxPerMm);
+      pdf.addImage(slice.toDataURL("image/jpeg", 0.9), "JPEG", margin, margin, usableW, h / pxPerMm);
       page++;
       y += h;
     }
@@ -1024,10 +1005,10 @@ function ReportPage(props) {
   var handleShare = function() { return prepareExport("pdf", "share"); };
 
   var getStatusIcon = function(status) {
-    if (status === "pass") return <I.Check className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />;
-    if (status === "fail") return <I.X className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />;
-    if (status === "tiered") return <I.Clock className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />;
-    return <I.Minus className="w-4 h-4 text-zinc-300 mt-0.5 flex-shrink-0" />;
+    if (status === "pass") return <I.Check className="w-4 h-4 text-emerald-500" />;
+    if (status === "fail") return <I.X className="w-4 h-4 text-red-500" />;
+    if (status === "tiered") return <I.Clock className="w-4 h-4 text-amber-500" />;
+    return <I.Minus className="w-4 h-4 text-zinc-300" />;
   };
 
   var reportRef = useRef(null);
@@ -1047,7 +1028,7 @@ function ReportPage(props) {
           <button onClick={handleShare} disabled={!!exporting[0]} className="text-purple-600 disabled:opacity-50">{exporting[0] === "share" ? <div className="w-5 h-5 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" /> : <I.Share className="w-5 h-5" />}</button>
         </div>
       </div>
-      <div ref={reportRef} className="px-4 py-6 space-y-6 pb-28">
+      <div ref={reportRef} className="px-4 py-6 space-y-6 pb-24">
         <div className="text-center">
           <p className="text-xs text-zinc-400 uppercase tracking-wider">Core International 2026</p>
           <h2 className="text-lg font-bold text-zinc-900 mt-1">Store #{meta.storeNumber || "—"}</h2>
@@ -1086,7 +1067,7 @@ function ReportPage(props) {
                     <span className="text-zinc-400 flex-shrink-0">{cs.earned}/{cs.possible}</span>
                     <span className="font-bold text-zinc-800 w-10 text-right flex-shrink-0">{cp}%</span>
                   </div>
-                  <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden ml-4"><div className="h-full rounded-full" style={{ width: cp + "%", backgroundColor: cat.color }} /></div>
+                  <div className="h-1.5 mt-2 bg-zinc-100 rounded-full overflow-hidden ml-4"><div className="h-full rounded-full" style={{ width: cp + "%", backgroundColor: cat.color }} /></div>
                 </div>
               );
             })}
@@ -1123,7 +1104,7 @@ function ReportPage(props) {
                 <h4 className="text-xs font-bold mt-2" style={{ color: cat.color }}>{cat.name}</h4>
                 {cs.items.map(function(item) {
                   return (
-                    <div key={item.id} className={"bg-white border rounded-lg p-3 flex items-start gap-2.5 " + (item.status === "fail" ? "border-red-200" : "border-zinc-200")}>
+                    <div key={item.id} className={"bg-white border rounded-lg px-3 py-2.5 flex items-start gap-2 " + (item.status === "fail" ? "border-red-200" : "border-zinc-200")}>
                       {getStatusIcon(item.status)}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -1132,7 +1113,7 @@ function ReportPage(props) {
                         </div>
                         <p className="text-xs text-zinc-700 mt-0.5 leading-tight">{item.title}</p>
                         {item.notes && <p className="text-[10px] text-blue-500 mt-1 italic">{item.notes}</p>}
-                        {item.photo && <ReportImage src={item.photo} alt={item.title} />}
+                        {item.photo && <img src={item.photo} className="mt-2 w-full max-h-40 object-cover rounded-lg border border-zinc-200" />}
                       </div>
                     </div>
                   );
